@@ -15,7 +15,7 @@ Resource files (see data subfolder):
 #include <math.h> //round
 
 #include <EEPROM.h>
-#define EEPROM_CHECK_VALUE 12346
+#define EEPROM_CHECK_VALUE 12347
 
 #include <LittleFS.h>
 
@@ -58,11 +58,6 @@ const char compile_date[] = __DATE__ " " __TIME__;
 
 const char *config_file_name PROGMEM = "/config.json";
 const char *wifis_file_name PROGMEM = "/wifis.json";
-
-#define NETTING_PERIOD_MIN 60 // should be 60, later 15
-
-#define STATES_DEVICE_MAX 999 // states belon (incl) are not replicated
-#define STATES_LOCAL_MAX 9999
 
 struct variable_st
 {
@@ -156,7 +151,7 @@ const int price_variable_blocks[] = {9, 24};
 // const int price_variable_blocks[] = {9};
 
 #define NETTING_PERIOD_MIN 60
-#define NETTING_PERIOD_SEC 3600
+#define NETTING_PERIOD_SEC (NETTING_PERIOD_MIN * 60)
 
 #define PV_FORECAST_HOURS 24
 
@@ -181,6 +176,7 @@ const char *outBiddingZone_Domain = "10YCZ-CEPS-----N";
 tm tm_struct_g;
 time_t next_query_input_data;
 bool update_external_variables_queued = false;
+bool influx_write_queued = false;
 
 // https://transparency.entsoe.eu/api?securityToken=41c76142-eaab-4bc2-9dc4-5215017e4f6b&documentType=A44&In_Domain=10YFI-1--------U&Out_Domain=10YFI-1--------U&processType=A16&outBiddingZone_Domain=10YCZ-CEPS-----N&periodStart=202104200000&periodEnd=202104200100
 const int httpsPort = 443;
@@ -611,54 +607,70 @@ Variables vars;
 #ifdef INFLUX_REPORT_ENABLED
 #include <InfluxDbClient.h>
 
-//#include <InfluxDbCloud.h>
-
-// TODO: move to parameters
-const char *influxdb_url PROGMEM = "https://europe-west1-1.gcp.cloud2.influxdata.com";
-
-const char *influxdb_token PROGMEM = "";
-
-// Organization is the name of the organization you wish to write to; must exist.
-const char *influxdb_org PROGMEM = "olli@rinne.fi";
-const char *influxdb_bucket PROGMEM = "arska";
-InfluxDBClient ifclient(influxdb_url, influxdb_org, influxdb_bucket, influxdb_token);
-
-bool report_variables_influx(time_t period_start)
+typedef struct
 {
-  Point period_data("arska_period");
-  period_data.addTag("device", "alpha");
+  char url[70];
+  char token[100];
+  char org[30];
+  char bucket[20];
+} influx_settings_struct;
 
-  ifclient.setInsecure(true);
-  // period_data.clearFields();
+influx_settings_struct s_influx;
 
+Point period_data("arska_period");
+
+void add_variables_to_influx_buffer(time_t ts)
+{
+
+  period_data.setTime(ts);
   if (vars.is_set(VARIABLE_PRICE))
     period_data.addField("price", vars.get_f(VARIABLE_PRICE));
   else
     Serial.print("Price not set");
 
-  // period_data.addField("price1", 11.1);
-
   if (vars.is_set(VARIABLE_PRODUCTION_POWER))
     period_data.addField("productionW", vars.get_f(VARIABLE_PRODUCTION_POWER));
-    
- /* if (vars.is_set(VARIABLE_SELLING_POWER))
+
+  if (vars.is_set(VARIABLE_SELLING_POWER))
     period_data.addField("sellingW", vars.get_f(VARIABLE_SELLING_POWER));
-*/
+
   if (vars.is_set(VARIABLE_SELLING_ENERGY))
-    period_data.addField("sellingkWh", vars.get_f(VARIABLE_SELLING_ENERGY));
+    period_data.addField("sellingWh", vars.get_f(VARIABLE_SELLING_ENERGY));
+}
+bool write_buffer_to_influx()
+{
+  if (!period_data.hasFields())
+    return true; // no fields in the buffer
+
+  // TODO: move to parameters, ui, siirrä program memoryyn...
+  strcpy(s_influx.url, ("https://europe-west1-1.gcp.cloud2.influxdata.com"));
+  strcpy(s_influx.org, ("olli@rinne.fi"));
+  strcpy(s_influx.bucket, ("arska"));
+  InfluxDBClient ifclient(s_influx.url, s_influx.org, s_influx.bucket, s_influx.token);
+
+  ifclient.setWriteOptions(WriteOptions().writePrecision(WritePrecision::S));
+
+  // ifclient.setConnectionParams(s_influx.url, s_influx.org, s_influx.bucket, s_influx.token);
+
+  if (!period_data.hasTags())
+    period_data.addTag("device", "alpha");
+
+  ifclient.setInsecure(true);
+  //
 
   Serial.print("Writing: ");
   Serial.println(ifclient.pointToLineProtocol(period_data));
 
-  period_data.setTime(period_start);
   // Write point
-  if (!ifclient.writePoint(period_data))
+  bool write_ok = ifclient.writePoint(period_data);
+
+  if (!write_ok)
   {
     Serial.print("InfluxDB write failed: ");
     Serial.println(ifclient.getLastErrorMessage());
-    return false;
   }
-  return true;
+  period_data.clearFields();
+  return write_ok;
 }
 #endif
 
@@ -762,7 +774,6 @@ unsigned long power_produced_period_avg = 0;
 // Target/condition row stucture, elements of target array in channel, stored in non-volatile memory
 typedef struct
 {
-  uint16_t upstates[CHANNEL_STATES_MAX]; // remove
   statement_st statements[RULE_STATEMENTS_MAX];
   float target_val;
   bool switch_on;
@@ -790,7 +801,6 @@ typedef struct
 typedef struct
 {
   int check_value;
-  bool sta_mode; // removed, always, excect backup?
   char wifi_ssid[MAX_ID_STR_LENGTH];
   char wifi_password[MAX_ID_STR_LENGTH];
   char http_username[MAX_ID_STR_LENGTH];
@@ -823,11 +833,12 @@ settings_struct s;
 // parse char array to uint16_t array (e.g. states, ip address)
 // note: current version alter str_in, so use copy in calls if original still needed
 // TÄMÄ KAATUU ESP32:ssa?
-void str_to_uint_array(const char *str_in, uint16_t array_out[CHANNEL_STATES_MAX], const char *separator)
+#define MAX_SPLIT_ARRAY_SIZE 10 // TODO: check if we do still need fixed array here
+void str_to_uint_array(const char *str_in, uint16_t array_out[MAX_SPLIT_ARRAY_SIZE], const char *separator)
 {
   char *ptr = strtok((char *)str_in, separator); // breaks string str into a series of tokens using the delimiter delim.
   byte i = 0;
-  for (int ch_state_idx = 0; ch_state_idx < CHANNEL_STATES_MAX; ch_state_idx++)
+  for (int ch_state_idx = 0; ch_state_idx < MAX_SPLIT_ARRAY_SIZE; ch_state_idx++)
   {
     array_out[ch_state_idx] = 0;
   }
@@ -838,7 +849,7 @@ void str_to_uint_array(const char *str_in, uint16_t array_out[CHANNEL_STATES_MAX
     array_out[i] = atol(ptr);
     ptr = strtok(NULL, separator);
     i++;
-    if (i == CHANNEL_STATES_MAX)
+    if (i == MAX_SPLIT_ARRAY_SIZE)
     {
       break;
     }
@@ -1017,15 +1028,26 @@ bool read_config_file(bool read_all_settings)
 // reads sessing from eeprom
 void readFromEEPROM()
 {
+  int used_size = sizeof(s);
   EEPROM.get(eepromaddr, s);
+#ifdef INFLUX_REPORT_ENABLED
+  EEPROM.get(eepromaddr + used_size, s_influx);
+  used_size += sizeof(s_influx);
+#endif
   Serial.print(F("readFromEEPROM: Reading settings from eeprom, Size: "));
-  Serial.println(sizeof(s));
+  Serial.println(used_size);
 }
 
 // writes settigns to eeprom
 void writeToEEPROM()
 {
+
+  int used_size = sizeof(s);
   EEPROM.put(eepromaddr, s); // write data to array in ram
+#ifdef INFLUX_REPORT_ENABLED
+  EEPROM.put(eepromaddr + used_size, s_influx);
+  used_size += sizeof(s_influx);
+#endif
   EEPROM.commit();
   Serial.print(F("writeToEEPROM: Writing settings to eeprom."));
 }
@@ -1189,7 +1211,7 @@ bool read_meter_shelly3em()
   }
 
   meter_read_ts = doc["unixtime"];
-  unsigned now_period = int(meter_read_ts / (NETTING_PERIOD_MIN * 60));
+  unsigned now_period = int(meter_read_ts / (NETTING_PERIOD_SEC));
 
   if (last_period != now_period and last_period > 0)
   { // new period
@@ -1346,7 +1368,7 @@ long int get_mbus_value(IPAddress remote, const int reg_offset, uint16_t reg_num
 // reads production data from SMA inverted (ModBus TCP)
 bool read_inverter_sma_data(long int &total_energy, long int &current_power)
 {
-  uint16_t ip_octets[CHANNEL_STATES_MAX];
+  uint16_t ip_octets[MAX_SPLIT_ARRAY_SIZE];
   char host_ip[16];
   strcpy(host_ip, s.energy_meter_host); // must be locally allocated
   str_to_uint_array(host_ip, ip_octets, ".");
@@ -1486,6 +1508,7 @@ void update_internal_variables()
     get_values_shelly3m(netEnergyInPeriod, netPowerInPeriod);
     vars.set(VARIABLE_EXTRA_PRODUCTION, (long)(netEnergyInPeriod < 0) ? 1L : 0L);
     vars.set(VARIABLE_SELLING_POWER, (long)(-netPowerInPeriod));
+    vars.set(VARIABLE_SELLING_ENERGY, (long)(-netEnergyInPeriod));
   }
 #endif
 
@@ -1503,7 +1526,7 @@ long get_price_for_time(time_t ts)
 {
   // returns VARIABLE_LONG_UNKNOWN if unavailable
   // use global prices, prices_first_period
-  int price_idx = (int)(ts - prices_first_period) / (NETTING_PERIOD_MIN * 60);
+  int price_idx = (int)(ts - prices_first_period) / (NETTING_PERIOD_SEC);
   if (price_idx < 0 || price_idx >= MAX_PRICE_PERIODS)
   {
     // Serial.printf("price_idx: %i , prices_first_period: ", price_idx);
@@ -1665,8 +1688,6 @@ bool get_solar_forecast()
       pv_value += pv_value_hour;
       //  Serial.printf("j: %d, price: %ld,  sum_pv_fcst_with_price: %f , pv_value_hour: %f, pv_value: %f\n", j, price, sum_pv_fcst_with_price, pv_value_hour, pv_value);
     }
-    else
-      Serial.println(F("VARIABLE_LONG_UNKNOWN"));
 
     j++;
   }
@@ -3093,15 +3114,16 @@ void onWebChannelsPost(AsyncWebServerRequest *request)
         }
       }
 
-      snprintf(state_fld, 20, "st_%i_%i", channel_idx, condition_idx);
-      snprintf(target_fld, 20, "t_%i_%i", channel_idx, condition_idx);
-      snprintf(targetcb_fld, 20, "ctcb_%i_%i", channel_idx, condition_idx);
+      //   snprintf(state_fld, 20, "st_%i_%i", channel_idx, condition_idx);
+      //   snprintf(target_fld, 20, "t_%i_%i", channel_idx, condition_idx);
+
       // TODO:state_fld tallennus poistuu
-      if (request->hasParam(state_fld, true))
-      {
-        str_to_uint_array(request->getParam(state_fld, true)->value().c_str(), s.ch[channel_idx].conditions[condition_idx].upstates, ",");
-        s.ch[channel_idx].conditions[condition_idx].target_val = request->getParam(target_fld, true)->value().toFloat();
-      }
+      /*  if (request->hasParam(state_fld, true))
+        {
+          str_to_uint_array(request->getParam(state_fld, true)->value().c_str(), s.ch[channel_idx].conditions[condition_idx].upstates, ",");
+          s.ch[channel_idx].conditions[condition_idx].target_val = request->getParam(target_fld, true)->value().toFloat();
+        } */
+      snprintf(targetcb_fld, 20, "ctcb_%i_%i", channel_idx, condition_idx);
       s.ch[channel_idx].conditions[condition_idx].switch_on = request->hasParam(targetcb_fld, true); // cb checked
     }
   }
@@ -3184,7 +3206,6 @@ void onWebStatusGet(AsyncWebServerRequest *request)
   {
     return request->requestAuthentication();
   }
-  Serial.println("onWebStatusGet A");
   StaticJsonDocument<550> doc; // oli 128, lisätty heapille ja invertterille
   String output;
 
@@ -3558,7 +3579,7 @@ void setup()
 // returns start time period (first second of an hour if 60 minutes netting period) of time stamp,
 long get_period_start_time(long ts)
 {
-  return long(ts / (NETTING_PERIOD_MIN * 60UL)) * (NETTING_PERIOD_MIN * 60UL);
+  return long(ts / (NETTING_PERIOD_SEC)) * (NETTING_PERIOD_SEC);
 }
 
 // This function is executed repeatedly after setpup()
@@ -3593,7 +3614,7 @@ void loop()
   if (started < 1600000000)
     started = now;
 
-  current_period_start = get_period_start_time(now); // long(now / (NETTING_PERIOD_MIN * 60UL)) * (NETTING_PERIOD_MIN * 60UL);
+  current_period_start = get_period_start_time(now);
   if (get_period_start_time(now) == get_period_start_time(started))
     recording_period_start = started;
   else
@@ -3602,9 +3623,10 @@ void loop()
   if (previous_period_start != current_period_start)
   {
     period_changed = true;
-    // TODO: tästö voisi lähteä kutsumaan influsxdata-siirtoa
+// TODO: tästö voisi lähteä kutsumaan influsxdata-siirtoa
 #ifdef INFLUX_REPORT_ENABLED
-    report_variables_influx(previous_period_start); // timestamp diffrent for price, production etc
+    add_variables_to_influx_buffer(previous_period_start); 
+    influx_write_queued = true;
 #endif
   }
 
@@ -3639,9 +3661,17 @@ void loop()
     return;
   }
 
+#ifdef INFLUX_REPORT_ENABLED
+  if (influx_write_queued)
+  {
+    influx_write_queued = false;
+    write_buffer_to_influx();
+  }
+
+#endif
+
   if (next_query_input_data < now)
   {
-
     /*  if (s.variable_mode== 0) {
           //get from original sources
       }

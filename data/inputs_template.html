@@ -1,38 +1,187 @@
 <html>
+
 <head>
     <meta charset="UTF-8">
     <title>Arska Node | Input Server Settings</title>
     <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 
-<body onload="initForm('/inputs');setEnergyMeterFields(%emt%);">
+<body onload="initForm('/inputs')">
+    <script src="js/jquery-3.6.0.min.js"></script>
     <script src="js/arska.js"></script>
     <div class="secbr" id="headdiv">
     </div>
-    <form method="post" onsubmit="setFormSubmitting()">
+    <form method="post" id="inpFrm" onsubmit="return submitInputsForm(event)""> 
         <input name="source" type="hidden" value="inputs">
-         %energy_meter_fields%
+
+
+        <div class='secbr'>
+            <h3>Energy meter</h3>
+        </div>
+        <div class='fld'><select name='emt' id='emt' onchange='setEnergyMeterFields(this.value)'>%emt_options%</select>
+        </div>
+        <div id='emhd' class='fld'>
+            <div class='fldlong'>host:<input name='emh' id='emh' type='text' value='%emh%'></div>
+            <div id='empd' class='fldtiny'>port:<input name='emp' id='emp' type='text' value='%emp%'></div>
+            <div id='emidd' class='fldtiny'>unit:<input name='emid' id='emid' type='text' value='%emid%'></div>
+        </div>
+
+
         <div class="fldshort" id="baseld">base load (W):<input name="baseload" class="inpnum" type="text"
                 value="%baseload%"></div>
 
         <div class="secbr">
-            <h3>Arska Server</h3>
+            <h3>Arska variable mode</h3>
         </div>
-            <div class="fldh">host:<input name="pg_host" type="text" value="%pg_host%" maxlen='29'></div>
-            <div class="fld">API key:<input name="pg_api_key" type="text" value="%pg_api_key%" maxlen='36'></div>
-
+        <input type="hidden" id="VARIABLE_SOURCE_ENABLED" value="%VARIABLE_SOURCE_ENABLED%">
+        <input type="hidden" id="variable_mode_db" value="%variable_mode%">
+        <div class="secbr"><input type="radio" id="variable_mode_0" name="variable_mode" value="0"
+                onchange="setVariableMode(this.value)"><label for='vm0'>Source - calculate variables based on
+                market
+                and forecast info</label></div>
+        <div class="indent">
+            <div class="secbr">EntsoE API key:<br><input class="fldlong" id="entsoe_api_key" name="entsoe_api_key"
+                    type="text" value="%entsoe_api_key%" maxlen='36'></div>
             <div class="secbr">
-                <h3>Location</h3>
-                <div class="fldtiny">lat:<input name="lat" type="text" value="%lat%"></div>
-                <div class="fldtiny">lon:<input name="lon" type="text" value="%lon%"></div>
-                <div class="fldshort">forecast location:<input name="forecast_loc" maxlen='29' type="text"
-                        value="%forecast_loc%"></div>
+                <input type="hidden" id="forecast_loc_db" value="%forecast_loc%">Forecast
+                location:<br><select id="forecast_loc" name="forecast_loc">
+                    <option value="#">not in use</option>
+                    <option>Akaa</option>
+                    <option>Alajärvi</option>
+                    <option>Alavus</option>
+                    <option>Espoo</option>
+                    <option>Forssa</option>
+                    <option>Haapajärvi</option>
+                    <option>Haapavesi</option>
+                    <option>Hamina</option>
+                    <option>Hanko</option>
+                    <option>Harjavalta</option>
+                    <option>Heinola</option>
+                    <option>Helsinki</option>
+                    <option>Hetta</option>
+                    <option>Huittinen</option>
+                    <option>Hyvinkää</option>
+                    <option>Hämeenlinna</option>
+                    <option>Iisalmi</option>
+                    <option>Ikaalinen</option>
+                    <option>Imatra</option>
+                    <option>Inari</option>
+                    <option>Jakobstad</option>
+                    <option>Joensuu</option>
+                    <option>Juankoski</option>
+                    <option>Jyväskylä</option>
+                    <option>Jämsä</option>
+                    <option>Järvenpää</option>
+                    <option>Kaarina</option>
+                    <option>Kajaani</option>
+                    <option>Kalajoki</option>
+                    <option>Kankaanpää</option>
+                    <option>Kannus</option>
+                    <option>Karkkila</option>
+                    <option>Kaskinen</option>
+                    <option>Kauhajoki</option>
+                    <option>Kauhava</option>
+                    <option>Kauniainen</option>
+                    <option>Kemi</option>
+                    <option>Kemijärvi</option>
+                    <option>Kerava</option>
+                    <option>Keuruu</option>
+                    <option>Kilpisjärvi</option>
+                    <option>Kitee</option>
+                    <option>Kittilä</option>
+                    <option>Kiuruvesi</option>
+                    <option>Kokemäki</option>
+                    <option>Kokkola</option>
+                    <option>Kotka</option>
+                    <option>Kouvola</option>
+                    <option>Kristinestad</option>
+                    <option>Kuhmo</option>
+                    <option>Kuopio</option>
+                    <option>Kurikka</option>
+                    <option>Kuusamo</option>
+                    <option>Lahti</option>
+                    <option>Laitila</option>
+                    <option>Lappeenranta</option>
+                    <option>Lapua</option>
+                    <option>Lieksa</option>
+                    <option>Lohja</option>
+                    <option>Loimaa</option>
+                    <option>Loviisa</option>
+                    <option>Mariehamn</option>
+                    <option>Mikkeli</option>
+                    <option>Muonio</option>
+                    <option>Mänttä-Vilppula</option>
+                    <option>Naantali</option>
+                    <option>Nilsiä</option>
+                    <option>Nivala</option>
+                    <option>Nokia</option>
+                    <option>Nurmes</option>
+                    <option>Nykarleby</option>
+                    <option>Närpes</option>
+                    <option>Orimattila</option>
+                    <option>Orivesi</option>
+                    <option>Oulainen</option>
+                    <option>Oulu</option>
+                    <option>Outokumpu</option>
+                    <option>Paimio</option>
+                    <option>Pargas</option>
+                    <option>Parkano</option>
+                    <option>Pello</option>
+                    <option>Pieksämäki</option>
+                    <option>Pori</option>
+                    <option>Porvoo</option>
+                    <option>Pudasjärvi</option>
+                    <option>Pyhäjärvi</option>
+                    <option>Raahe</option>
+                    <option>Raisio</option>
+                    <option>Raseborg</option>
+                    <option>Rauma</option>
+                    <option>Riihimäki</option>
+                    <option>Rovaniemi</option>
+                    <option>Saarijärvi</option>
+                    <option>Saariselkä</option>
+                    <option>Salla</option>
+                    <option>Salo</option>
+                    <option>Sastamala</option>
+                    <option>Savonlinna</option>
+                    <option>Seinäjoki</option>
+                    <option>Sodankylä</option>
+                    <option>Somero</option>
+                    <option>Suonenjoki</option>
+                    <option>Tampere</option>
+                    <option>Tornio</option>
+                    <option>Turku</option>
+                    <option>Ulvila</option>
+                    <option>Utsjoki</option>
+                    <option>Uusikaupunki</option>
+                    <option>Vaasa</option>
+                    <option>Valkeakoski</option>
+                    <option>Vantaa</option>
+                    <option>Varkaus</option>
+                    <option>Viitasaari</option>
+                    <option>Vilppula</option>
+                    <option>Virrat</option>
+                    <option>Ylivieska</option>
+                    <option>Ylöjärvi</option>
+                    <option>Ähtäri</option>
+                    <option>Äänekoski</option>
+                </select>
             </div>
-            <br><input type="submit" value="Save">
-               </form>
+        </div>
+        <div class="secbr">
+            <input type="radio" id="variable_mode_1" name="variable_mode" value="1"
+                onchange="setVariableMode(this.value)"><label for='vm1'>Replica - get variables from another Arska
+                device</label>
+        </div>
+        <div class="indent">
+            <div class="secbr">Variable source:<br><input class="fldlong" id="variable_server" name="variable_server"
+                    type="text" value="%variable_server%" maxlen='29'></div>
+        </div>
+        <br><input type="submit" value="Save">
+    </form>
 
-               <div class="secbr" id="footerdiv">
-            </div>
-                    </body>
+    <div class="secbr" id="footerdiv">
+    </div>
+</body>
 
 </html>

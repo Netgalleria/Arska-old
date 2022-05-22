@@ -15,6 +15,13 @@ var setFormSubmitting = function () {
     formSubmitting = true;
 };
 
+function setVariableMode(variable_mode) {
+    document.getElementById("entsoe_api_key").disabled = (variable_mode != 0);
+    document.getElementById("forecast_loc").disabled = (variable_mode != 0);
+    document.getElementById("variable_server").disabled = (variable_mode != 1);
+}
+
+
 function statusCBClicked(elCb) {
     //if (elCb.checked) {
     setTimeout(function () { updateStatus(elCb.checked); }, 1000);
@@ -57,6 +64,15 @@ function show_channel_status(channel_idx, is_up) {
     console.log(status_el.id + ", " + href);
     status_el.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href);
     // snprintf(buff2,90,  "<svg viewBox='0 0 100 100' style='height:3em;'><use href='%s' id='status_%d'/></svg>",s.ch[channel_idx].is_up ? "#green" : "#red",channel_idx);
+}
+
+
+var submitInputsForm = function (e) { 
+    if (!confirm("Save and restart."))
+        return false;
+    formSubmitting = true;
+    return true;
+
 }
 
 var submitChannelForm = function (e) {
@@ -415,8 +431,9 @@ function setOper(el) {
 }
 
 
-function setEnergyMeterFields(val) { //
-    idx = parseInt(val);
+function setEnergyMeterFields(emt) { //
+    
+    idx = parseInt(emt);
 
     var emhd = document.querySelector('#emhd');
     var empd = document.querySelector('#empd');
@@ -605,10 +622,29 @@ function initForm(url) {
         setTimeout(function () { updateStatus(false); }, 3000);
     }
 
+    else if (url == '/inputs') {
+        if (document.getElementById("VARIABLE_SOURCE_ENABLED").value == 0) {
+            variable_mode = 1;
+            document.getElementById("variable_mode_0").disabled = true;
+        }
+        else {
+            variable_mode = document.getElementById("variable_mode_db").value;
+        }
+        
+        setVariableMode(variable_mode);
+        document.getElementById("variable_mode_" + variable_mode).checked = true;
+
+        setEnergyMeterFields( document.getElementById("emt").value);
+        var mLocation = document.getElementById("forecast_loc_db").value;
+        $('#forecast_loc option').filter(function () {
+            return this.value.indexOf(mLocation) > -1;
+        }).prop('selected', true);
+
+    }
 
     var footerdiv = document.getElementById("footerdiv");
     if (footerdiv) {
-        footerdiv.innerHTML = "<a href='http://netgalleria.fi/rd/?arska-wiki' target='arskaw'>Arska Wiki</a> | <a href='http://netgalleria.fi/rd/?arska-states' target='arskaw'>States</a> | <a href='http://netgalleria.fi/rd/?arska-rulesets'  target='arskaw'>Rulesets</a>";
+        footerdiv.innerHTML = "<a href='http://netgalleria.fi/rd/?arska-wiki' target='arskaw'>Arska Wiki</a> ";
     }
 }
 

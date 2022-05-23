@@ -75,6 +75,7 @@ struct variable_st
 time_t now; // this is the epoch
 tm tm_struct;
 
+//TODO: check if needed, not in use currently
 bool processing_variables = false; // trying to be "thread-safe", do not give state query http replies while processing
 
 // for timezone https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -644,6 +645,7 @@ bool write_buffer_to_influx()
 
   // TODO: move to parameters, ui, siirrä program memoryyn...
   strcpy(s_influx.url, ("https://europe-west1-1.gcp.cloud2.influxdata.com"));
+  strcpy(s_influx.token, (""));
   strcpy(s_influx.org, ("olli@rinne.fi"));
   strcpy(s_influx.bucket, ("arska"));
   InfluxDBClient ifclient(s_influx.url, s_influx.org, s_influx.bucket, s_influx.token);
@@ -1190,6 +1192,8 @@ void get_values_shelly3m(float &netEnergyInPeriod, float &netPowerInPeriod)
   {
     netPowerInPeriod = 0;
   }
+  Serial.printf("get_values_shelly3m netEnergyInPeriod: %f, netPowerInPeriod %f , meter_read_ts %ld, last_period_last_ts %ld\n"
+  , netEnergyInPeriod, netPowerInPeriod, meter_read_ts, last_period_last_ts);
 }
 
 // reads grid export/import from Shelly 3EM
@@ -1197,6 +1201,8 @@ bool read_meter_shelly3em()
 {
   if (strlen(s.energy_meter_host) == 0)
     return false;
+
+
   DynamicJsonDocument doc(2048);
 
   String url = "http://" + String(s.energy_meter_host) + "/status";
@@ -1249,6 +1255,7 @@ bool read_meter_shelly3em()
     energyin_prev = energyin;
     energyout_prev = energyout;
   }
+
   return true;
 }
 #endif
@@ -2127,7 +2134,7 @@ void get_channel_config_fields(char *out, int channel_idx)
     // if gpio channels and non-gpio channels can not be mixed
     //  tässä kai pitäisi toinen ottaa channelista, toinen loopista
     is_gpio_channel = (s.ch[channel_idx].gpio != 255);
-    // Serial.printf("is_gpio_channel %d %d %d\n",channel_idx,is_gpio_channel,s.ch[channel_idx].gpio);
+    Serial.printf("is_gpio_channel %d %d %d\n",channel_idx,is_gpio_channel,s.ch[channel_idx].gpio);
 
     if ((channel_type_idx == 1 && is_gpio_channel) || !(channel_type_idx == 1 || is_gpio_channel))
     {
@@ -3694,11 +3701,11 @@ void loop()
   if (((millis() - sensor_last_refresh) > process_interval_s * 1000) || period_changed)
   {
     Serial.print(F("Reading sensor and meter data..."));
-#ifdef SENSOR_DS18B20_ENABLED
-    read_sensor_ds18B20();
-#endif
-
     read_energy_meter();
+
+#ifdef SENSOR_DS18B20_ENABLED
+    read_sensor_ds18B20(); //this can last a while due to possible reset timeout
+#endif
 
     processing_variables = true;
 

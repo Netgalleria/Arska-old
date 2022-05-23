@@ -1,3 +1,6 @@
+/*
+Copyright, Netgalleria Oy, Olli Rinne 2021-2022
+*/
 const sections = [{ "url": "/", "en": "Dashboard" }, { "url": "/inputs", "en": "Inputs" }
     , { "url": "/channels", "en": "Channels" }, { "url": "/admin", "en": "Admin" }];
 
@@ -30,7 +33,6 @@ function statusCBClicked(elCb) {
 }
 
 function updateStatus(show_variables = true) {
-
     $.getJSON('/status', function (data) {
         if (show_variables) {
             document.getElementById("variables").style.display = document.getElementById("statusauto").checked ? "block" : "none";
@@ -66,18 +68,17 @@ function show_channel_status(channel_idx, is_up) {
     // snprintf(buff2,90,  "<svg viewBox='0 0 100 100' style='height:3em;'><use href='%s' id='status_%d'/></svg>",s.ch[channel_idx].is_up ? "#green" : "#red",channel_idx);
 }
 
-
-var submitInputsForm = function (e) { 
+// before submitting input admin form
+var submitInputsForm = function (e) {
     if (!confirm("Save and restart."))
         return false;
     formSubmitting = true;
     return true;
-
 }
 
+// Before submitting channels config form
 var submitChannelForm = function (e) {
     // e.preventDefault();
-
     if (!confirm("Save channel settings?"))
         return false;
 
@@ -136,12 +137,11 @@ var submitChannelForm = function (e) {
     for (var i = 0; i < disSels.length; i++) {
         disSels[i].disabled = false;
     }
-
-
     formSubmitting = true;
-
     return true;
 };
+
+
 var isDirty = function () { return true; }
 
 function getVariable(variable_id) {
@@ -151,6 +151,8 @@ function getVariable(variable_id) {
     }
     return null;
 }
+
+// Add option to a given select element
 function addOption(el, value, text, selected = false) {
     var opt = document.createElement("option");
     opt.value = value;
@@ -159,7 +161,6 @@ function addOption(el, value, text, selected = false) {
     // then append it to the select element
     el.appendChild(opt);
 }
-
 
 
 
@@ -175,7 +176,6 @@ function populateStmtField(varFld, stmt = [-1, -1, 0]) {
     document.getElementById(varFld.id.replace("var", "op")).style.display = "none";
 
     advanced_mode = document.getElementById("mo_" + channel_idx + "_0").checked;
-
 
     addOption(varFld, -2, "remove");
     addOption(varFld, -1, "select", (stmt[0] == -1));
@@ -245,7 +245,10 @@ function addStmt(elBtn, channel_idx = -1, cond_idx = 1, stmt_idx = -1, stmt = [-
     const sel_var = createElem("select", "var" + suffix, null, "fldstmt indent", null);
     sel_var.addEventListener("change", setVar);
     const sel_op = createElem("select", "op" + suffix, null, "fldstmt", null);
-    sel_op.on_change = 'setOper(this)';
+
+    sel_op.addEventListener("change", setOper);
+
+
     const inp_const = createElem("input", "const" + suffix, 0, "fldtiny fldstmt inpnum", "text");
     const div_std = createElem("div", "std" + suffix, -2147483648, "divstament", "text");
     div_std.appendChild(sel_var);
@@ -278,7 +281,7 @@ function saveVal(el) {
 
 function templateChanged(selEl) {
     const fldA = selEl.id.split("_");
-    channel_idx = fldA[1];
+    channel_idx = parseInt(fldA[1]);
     console.log(selEl.value, channel_idx);
     template_idx = selEl.value;
     url = '/data/templates?id=' + template_idx;
@@ -426,13 +429,24 @@ function setVar(evt) {
     }
 
 }
-function setOper(el) {
 
+// operator select changed, show next statement fields if hidden
+function setOper(evt) { 
+    const el = evt.target;
+    if ((el.value >= 0)) {
+        fldA = el.id.split("_");
+        channel_idx = parseInt(fldA[1]);
+        cond_idx = parseInt(fldA[2]);
+        // show initially hidden rules
+        if ((cond_idx + 1) < CHANNEL_CONDITIONS_MAX) {
+            document.getElementById("ru_" + channel_idx + "_" + (cond_idx + 1)).style.display = "block";
+        }
+    }
 }
 
 
 function setEnergyMeterFields(emt) { //
-    
+
     idx = parseInt(emt);
 
     var emhd = document.querySelector('#emhd');
@@ -465,6 +479,7 @@ function setEnergyMeterFields(emt) { //
 function fillStmtRules(channel_idx, rule_mode) {
     console.log("fillStmtRules", channel_idx, rule_mode);
 
+    prev_rule_var_defined = true;
     for (let cond_idx = 0; cond_idx < CHANNEL_CONDITIONS_MAX; cond_idx++) {
         firstStmtVarId = "var_" + channel_idx + "_" + cond_idx + "_0";
         firstStmtVar = document.getElementById(firstStmtVarId);
@@ -476,6 +491,16 @@ function fillStmtRules(channel_idx, rule_mode) {
         //    first_var_defined = (firstStmtVar.value >= 0);
 
         show_rule = (rule_mode == 0) || first_var_defined;
+        // testing hiding , hide empty rules to save space
+        if (rule_mode == 0) {
+            if (cond_idx == 0)
+                show_rule = true;
+            else {
+                show_rule = prev_rule_var_defined;
+            }
+        }
+        prev_rule_var_defined = first_var_defined;
+
 
         //just debug
         if (first_var_defined)
@@ -505,8 +530,6 @@ function initChannelForm() {
         //TODO: fix if more types coming
         chtype = document.getElementById('chty_' + channel_idx).value;
         setChannelFieldsByType(channel_idx, chtype);
-
-
     }
 
     let stmts_s = document.querySelectorAll("input[id^='stmts_']");
@@ -559,16 +582,15 @@ function initChannelForm() {
 function setChannelFieldsByType(ch, chtype) {
     for (var t = 0; t < RULE_STATEMENTS_MAX; t++) {
         divid = 'td_' + ch + "_" + t;
-
         var uptimediv = document.querySelector('#d_uptimem_' + ch);
-
         if (chtype == 0)
             uptimediv.style.display = "none";
         else
             uptimediv.style.display = "block";
-
     }
 }
+
+
 function initUrlBar(url) {
     var headdiv = document.getElementById("headdiv");
 
@@ -630,11 +652,11 @@ function initForm(url) {
         else {
             variable_mode = document.getElementById("variable_mode_db").value;
         }
-        
+
         setVariableMode(variable_mode);
         document.getElementById("variable_mode_" + variable_mode).checked = true;
 
-        setEnergyMeterFields( document.getElementById("emt").value);
+        setEnergyMeterFields(document.getElementById("emt").value);
         var mLocation = document.getElementById("forecast_loc_db").value;
         $('#forecast_loc option').filter(function () {
             return this.value.indexOf(mLocation) > -1;
@@ -648,6 +670,7 @@ function initForm(url) {
     }
 }
 
+// for sorting wifis by signal strength
 function compare_wifis(a, b) {
     return ((a.rssi > b.rssi) ? -1 : 1);
 }
@@ -660,8 +683,6 @@ function initWifiForm() {
         if (wifi.id) {
             var opt = document.createElement("option");
             opt.value = wifi.id;
-            // if (wifi.id == wifi_ssid) //from constants via template processing
-            //     opt.selected = true;
             opt.innerHTML = wifi.id + ' (' + wifi.rssi + ')';
             wifi_sel.appendChild(opt);
         }
@@ -677,6 +698,7 @@ function setChannelFields(obj) {
     setChannelFieldsByType(ch, chtype);
 }
 
+// check admin form fields before form post 
 //beforeAdminSubmit
 function checkAdminForm() {
     document.querySelector('#ts').value = Date.now() / 1000;
@@ -693,9 +715,11 @@ function checkAdminForm() {
     return true;
 }
 
+// remove?
 function clearText(elem) {
     elem.value = '';
 }
+
 // Ruleset processing
 function processRulesetImport(evt) {
     if (!evt.target.id.startsWith("rules_"))
@@ -743,8 +767,10 @@ function processRulesetImport(evt) {
         }
     }
 }
+
 let rs1 = document.getElementById('rs1')
+/*
 document.addEventListener('paste', e => {
     processRulesetImport(e);
 })
-
+*/

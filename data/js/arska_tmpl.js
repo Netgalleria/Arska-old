@@ -287,7 +287,7 @@ function saveVal(el) {
 function _ltext(obj, prop) {
     if (obj.hasOwnProperty(prop + '_' + lang))
         return obj[prop + '_' + lang];
-    else if (obj.hasOwnProperty('prop'))
+    else if (obj.hasOwnProperty(prop))
         return obj[prop];
     else
         return '['+prop+']';

@@ -12,18 +12,21 @@
     <div class="secbr" id="headdiv">
     </div>
     <form method="post" id="inpFrm" onsubmit="return submitInputsForm(event)""> 
-        <input name="source" type="hidden" value="inputs">
+        <input name=" source" type="hidden" value="inputs">
 
 
         <div class='secbr'>
             <h3>Energy meter</h3>
         </div>
-        <div class='fld'><select name='emt' id='emt' onchange='setEnergyMeterFields(this.value)'>%emt_options%</select>
-        </div>
-        <div id='emhd' class='fld'>
-            <div class='fldlong'>host:<input name='emh' id='emh' type='text' value='%emh%'></div>
-            <div id='empd' class='fldtiny'>port:<input name='emp' id='emp' type='text' value='%emp%'></div>
-            <div id='emidd' class='fldtiny'>unit:<input name='emid' id='emid' type='text' value='%emid%'></div>
+        <div class="indent">
+            <div class='fld'><select name='emt' id='emt'
+                    onchange='setEnergyMeterFields(this.value)'>%emt_options%</select>
+            </div>
+            <div id='emhd' class='fld'>
+                <div class='fldlong'>host:<input name='emh' id='emh' type='text' value='%emh%'></div>
+                <div id='empd' class='fldtiny'>port:<input name='emp' id='emp' type='text' value='%emp%'></div>
+                <div id='emidd' class='fldtiny'>unit:<input name='emid' id='emid' type='text' value='%emid%'></div>
+            </div>
         </div>
 
 
@@ -42,9 +45,62 @@
         <div class="indent">
             <div class="secbr">EntsoE API key:<br><input class="fldlong" id="entsoe_api_key" name="entsoe_api_key"
                     type="text" value="%entsoe_api_key%" maxlen='36'></div>
+
+
+            <div class="secbr">
+                <input type="hidden" id="entsoe_area_code_db" value="%entsoe_area_code%">Price area:
+                <br><select id="entsoe_area_code" name="entsoe_area_code">
+                    <option value="#">not in use</option>
+                    <option value='10YAT-APG------L'>Austria, APG 🇦🇹</option>
+                    <option value='10YBE----------2'>Belgium, Elia 🇧🇪</option>
+                    <option value='10YCA-BULGARIA-R'>Bulgaria, ESO 🇧🇬</option>
+                    <option value='10YHR-HEP------M'>Croatia, HOPS 🇭🇷</option>
+                    <option value='10YCZ-CEPS-----N'>Czech Republic, CEPS 🇨🇿</option>
+                    <option value='10Y1001A1001A82H'>DE-LU 🇩🇪</option>
+                    <option value='10YDK-1--------W'>DK1 🇩🇰</option>
+                    <option value='10YDK-2--------M'>DK2 🇩🇰</option>
+                    <option value='10Y1001A1001A39I'>Estonia, Elering 🇪🇪</option>
+                    <option value='10YFI-1--------U'>Finland, Fingrid 🇫🇮</option>
+                    <option value='10YFR-RTE------C'>France, RTE 🇫🇷</option>
+                    <option value='10YGR-HTSO-----Y'>Greece, IPTO 🇬🇷</option>
+                    <option value='10YHU-MAVIR----U'>Hungary, MAVIR 🇭🇺</option>
+                    <option value='10Y1001A1001A59C'>Ireland (SEM) 🇮🇪</option>
+                    <option value='10Y1001A1001A885'>Italy_Saco_AC 🇮🇹</option>
+                    <option value='10Y1001A1001A893'>Italy_Saco_DC 🇮🇹</option>
+                    <option value='10Y1001C--00096J'>IT-Calabria 🇮🇹</option>
+                    <option value='10Y1001A1001A70O'>IT-Centre-North 🇮🇹</option>
+                    <option value='10Y1001A1001A71M'>IT-Centre-South 🇮🇹</option>
+                    <option value='10Y1001A1001A73I'>IT-North 🇮🇹</option>
+                    <option value='10Y1001A1001A74G'>IT-Sardinia 🇮🇹</option>
+                    <option value='10Y1001A1001A75E'>IT-Sicily 🇮🇹</option>
+                    <option value='10Y1001A1001A788'>IT-South 🇮🇹</option>
+                    <option value='10YLV-1001A00074'>Latvia, AST 🇱🇻</option>
+                    <option value='10YLT-1001A0008Q'>Lithuania, Litgrid 🇱🇹</option>
+                    <option value='10YNL----------L'>Netherlands, TenneT NL 🇳🇱</option>
+                    <option value='10YNO-1--------2'>NO1 🇳🇴</option>
+                    <option value='10YNO-2--------T'>NO2 🇳🇴</option>
+                    <option value='10YNO-3--------J'>NO3 🇳🇴</option>
+                    <option value='10YNO-4--------9'>NO4 🇳🇴</option>
+                    <option value='10Y1001A1001A48H'>NO5 🇳🇴</option>
+                    <option value='50Y0JVU59B4JWQCU'>NO2NSL 🇳🇴</option>
+                    <option value='10YPL-AREA-----S'>Poland, PSE SA 🇵🇱</option>
+                    <option value='10YPT-REN------W'>Portugal, REN 🇵🇹</option>
+                    <option value='10YRO-TEL------P'>Romania, Transelectrica 🇷🇴</option>
+                    <option value='10Y1001A1001A44P'>SE1 🇸🇪</option>
+                    <option value='10Y1001A1001A45N'>SE2 🇸🇪</option>
+                    <option value='10Y1001A1001A46L'>SE3 🇸🇪</option>
+                    <option value='10Y1001A1001A47J'>SE4 🇸🇪</option>
+                    <option value='10YCS-SERBIATSOV'>Serbia, EMS 🇷🇸</option>
+                    <option value='10YSK-SEPS-----K'>Slovakia, SEPS 🇸🇰</option>
+                    <option value='10YSI-ELES-----O'>Slovenia, ELES 🇸🇮</option>
+                    <option value='10YES-REE------0'>Spain, REE 🇪🇸</option>
+                    <option value='10YCH-SWISSGRIDZ'>Switzerland, Swissgrid 🇨🇭</option>
+                </select>
+            </div>
+
             <div class="secbr">
                 <input type="hidden" id="forecast_loc_db" value="%forecast_loc%">Forecast
-                location:<br><select id="forecast_loc" name="forecast_loc">
+                location (only Finland supported):<br><select id="forecast_loc" name="forecast_loc">
                     <option value="#">not in use</option>
                     <option>Akaa</option>
                     <option>Alajärvi</option>
@@ -176,6 +232,22 @@
         <div class="indent">
             <div class="secbr">Variable source:<br><input class="fldlong" id="variable_server" name="variable_server"
                     type="text" value="%variable_server%" maxlen='29'></div>
+        </div>
+        <div class="influx_div">
+            <div class="secbr">
+                <h3>InfluxDb Server</h3>
+            </div>
+            <div class="indent">
+                <input type="hidden" id="INFLUX_REPORT_ENABLED" value="%INFLUX_REPORT_ENABLED%">
+                <div class="secbr">Server URL:<br><input id="influx_url" name="influx_url" type="text"
+                        value="%influx_url%" maxlen='69'></div>
+                <div class="secbr">Token:<br><input id="influx_token" name="influx_token" type="text"
+                        value="%influx_token%" maxlen='99'></div>
+                <div class="secbr">Org:<br><input id="influx_org" name="influx_org" type="text" value="%influx_org%"
+                        maxlen='30'></div>
+                <div class="secbr">Bucket:<br><input id="influx_bucket" name="influx_bucket" type="text"
+                        value="%influx_bucket%" maxlen='19'></div>
+            </div>
         </div>
         <br><input type="submit" value="Save">
     </form>

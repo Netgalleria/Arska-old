@@ -15,7 +15,7 @@ Resource files (see data subfolder):
 #include <math.h> //round
 
 #include <EEPROM.h>
-#define EEPROM_CHECK_VALUE 12347
+#define EEPROM_CHECK_VALUE 12345
 
 #include <LittleFS.h>
 
@@ -43,7 +43,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define INVERTER_SMA_MODBUS_ENABLED       // can read SMA inverter Modbus TCP
 //#define RTC_DS3231_ENABLED
 
-#define INFLUX_REPORT_ENABLED
+// #define INFLUX_REPORT_ENABLED platformio.ini
 
 #define VARIABLE_SOURCE_ENABLED // only ESP32
 #define VARIABLE_MODE_SOURCE 0
@@ -75,7 +75,7 @@ struct variable_st
 time_t now; // this is the epoch
 tm tm_struct;
 
-//TODO: check if needed, not in use currently
+// TODO: check if needed, not in use currently
 bool processing_variables = false; // trying to be "thread-safe", do not give state query http replies while processing
 
 // for timezone https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -170,9 +170,11 @@ const char *host_prices PROGMEM = "transparency.entsoe.eu";
 const char *fcst_url_base PROGMEM = "http://www.bcdcenergia.fi/wp-admin/admin-ajax.php?action=getChartData";
 
 // String url = "/api?securityToken=41c76142-eaab-4bc2-9dc4-5215017e4f6b&documentType=A44&In_Domain=10YFI-1--------U&Out_Domain=10YFI-1--------U&processType=A16&outBiddingZone_Domain=10YCZ-CEPS-----N&periodStart=202204200000&periodEnd=202204200100";
+
 String url_base = "/api?documentType=A44&processType=A16";
-const char *queryInOutDomain = "10YFI-1--------U";
-const char *outBiddingZone_Domain = "10YCZ-CEPS-----N";
+// https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_areas
+// const char *queryInOutDomain = "10YFI-1--------U";
+// const char *outBiddingZone_Domain = "10YCZ-CEPS-----N"; //???
 
 tm tm_struct_g;
 time_t next_query_input_data;
@@ -281,15 +283,6 @@ void getRTC()
 #endif
 
 /*
-Variables voisi olla tässä silloin kun tarvitaan eli kun periodi aktiivinen:
-- tästä rakenteesta tehdään vertailu käyttäjän antamiin ehtoihin, confitions
-- haetaan päivitys externaaliesta ja internaaleista kun uusi periodi,
-- extrenaaleja voisi olla laskettu vähän etukäteenkin, jolloin mahdolliset kyselevätkin noodit saisivat jo tiedot etukäteen ettei tarvitse samalla sekunnilla kysellä
--  vai olisko kuitenkin selkeämpi, että valmiiksi laskettu vain sille tunnille, pitää vaan hoitaa, että jos "ala"noodi kysyelee liian aikaisin, niin annetaan lyhyt expiroitumisaika,
-    jotta ei jää aina tuntia jälkeen. Tähän voisi tehdä alanoodeille myös jonkin viiveen, että ei kysy aina vanhoja tietoja
-- externaalit muodostetaan valmiiksi haetuista json-filestä (prices, fcst) aina kun periodi vaihtuu
-*/
-/*
 jos ei löydy mitään operaattoria niin oletetaan booleaniksi
 "=" gt=false eq=true reverse=false.
 ">" gt=true eq=false reverse=false
@@ -297,12 +290,8 @@ jos ei löydy mitään operaattoria niin oletetaan booleaniksi
 "!",  reverse=true isboolean=true jos löytyy ekana "!" niin reverse boolean
 
 ">=" gt=true eq=true reverse=false
-"<="  gt=true eq=true reverse=true
+"<="  gt=true eq=false reverse=true
 "!=" gt=false eq=true reverse=true
-
-
-
-
 [no operator] reverse=false isboolean=true
 */
 struct oper_st
@@ -335,11 +324,12 @@ struct statement_st
   int variable_id;
   byte oper_id;
   byte constant_type;
+  unsigned int depends;
   long const_val;
 };
 
 // do not change variable id:s (will broke statements)
-#define VARIABLE_COUNT 18
+#define VARIABLE_COUNT 19
 
 #define VARIABLE_PRICE 0
 #define VARIABLE_PRICERANK_9 1
@@ -347,6 +337,7 @@ struct statement_st
 #define VARIABLE_PVFORECAST_SUM24 20
 #define VARIABLE_PVFORECAST_VALUE24 21
 #define VARIABLE_PVFORECAST_AVGPRICE24 22
+#define VARIABLE_AVGPRICE24_EXCEEDS_CURRENT 23
 #define VARIABLE_EXTRA_PRODUCTION 100
 #define VARIABLE_PRODUCTION_POWER 101
 #define VARIABLE_SELLING_POWER 102
@@ -360,6 +351,18 @@ struct statement_st
 #define VARIABLE_WINTERDAY_FI 140
 #define VARIABLE_SENSOR_1 201
 #define VARIABLE_LOCALTIME_TS 1001
+
+// variable dependency bitmask
+#define VARIABLE_DEPENDS_UNDEFINED 0
+#define VARIABLE_DEPENDS_PRICE 1
+#define VARIABLE_DEPENDS_SOLAR_FORECAST 2
+#define VARIABLE_DEPENDS_GRID_METER 4
+#define VARIABLE_DEPENDS_PRODUCTION_METER 8
+#define VARIABLE_DEPENDS_SENSOR 16
+
+// combined
+#define VARIABLE_DEPENDS_PRICE_SOLAR 3
+
 class Variables
 {
 public:
@@ -386,7 +389,8 @@ public:
 
 private:
   // 24 4 characters string stored to long, e.g. hhmm mmdd
-  variable_st variables[VARIABLE_COUNT] = {{VARIABLE_PRICE, "price", 1, false}, {VARIABLE_PRICERANK_9, "price rank 9h", 0}, {VARIABLE_PRICERANK_24, "price rank 24h", 0}, {VARIABLE_PVFORECAST_SUM24, "pv forecast 24 h", 1}, {VARIABLE_PVFORECAST_VALUE24, "pv value 24 h", 1}, {VARIABLE_PVFORECAST_AVGPRICE24, "pv price avg 24 h", 1}, {VARIABLE_EXTRA_PRODUCTION, "extra production", 51}, {VARIABLE_PRODUCTION_POWER, "production (per) W", 0}, {VARIABLE_SELLING_POWER, "selling W", 0}, {VARIABLE_SELLING_ENERGY, "selling Wh", 0}, {VARIABLE_MM, "mm, month", 22}, {VARIABLE_MMDD, "mmdd", 24}, {VARIABLE_WDAY, "weekday (1-7)", 0}, {VARIABLE_HH, "hh, hour", 22}, {VARIABLE_HHMM, "hhmm", 24}, {VARIABLE_DAYENERGY_FI, "day", 51}, {VARIABLE_WINTERDAY_FI, "winterday", 51}, {VARIABLE_SENSOR_1, "sensor 1", 1}};
+
+  variable_st variables[VARIABLE_COUNT] = {{VARIABLE_PRICE, "price", 1, VARIABLE_DEPENDS_PRICE}, {VARIABLE_PRICERANK_9, "price rank 9h", 0, VARIABLE_DEPENDS_PRICE}, {VARIABLE_PRICERANK_24, "price rank 24h", 0, VARIABLE_DEPENDS_PRICE}, {VARIABLE_PVFORECAST_SUM24, "pv forecast 24 h", 1, VARIABLE_DEPENDS_SOLAR_FORECAST}, {VARIABLE_PVFORECAST_VALUE24, "pv value 24 h", 1, VARIABLE_DEPENDS_PRICE_SOLAR}, {VARIABLE_PVFORECAST_AVGPRICE24, "pv price avg 24 h", 1, VARIABLE_DEPENDS_PRICE_SOLAR}, {VARIABLE_AVGPRICE24_EXCEEDS_CURRENT, "future pv higher", 1, VARIABLE_DEPENDS_PRICE_SOLAR}, {VARIABLE_EXTRA_PRODUCTION, "extra production", 51, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_PRODUCTION_POWER, "production (per) W", 0, VARIABLE_DEPENDS_PRODUCTION_METER}, {VARIABLE_SELLING_POWER, "selling W", 0, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_SELLING_ENERGY, "selling Wh", 0, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_MM, "mm, month", 22, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_MMDD, "mmdd", 24, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_WDAY, "weekday (1-7)", 0, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_HH, "hh, hour", 22, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_HHMM, "hhmm", 24, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_DAYENERGY_FI, "day", 51, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_WINTERDAY_FI, "winterday", 51, VARIABLE_DEPENDS_UNDEFINED}, {VARIABLE_SENSOR_1, "sensor 1", 1, VARIABLE_DEPENDS_SENSOR}};
   int get_variable_index(int id);
 };
 bool Variables::is_set(int id)
@@ -638,16 +642,17 @@ void add_variables_to_influx_buffer(time_t ts)
   if (vars.is_set(VARIABLE_SELLING_ENERGY))
     period_data.addField("sellingWh", vars.get_f(VARIABLE_SELLING_ENERGY));
 }
+
 bool write_buffer_to_influx()
 {
   if (!period_data.hasFields())
     return true; // no fields in the buffer
 
-  // TODO: move to parameters, ui, siirrä program memoryyn...
-  strcpy(s_influx.url, ("https://europe-west1-1.gcp.cloud2.influxdata.com"));
-  strcpy(s_influx.token, (""));
-  strcpy(s_influx.org, ("olli@rinne.fi"));
-  strcpy(s_influx.bucket, ("arska"));
+  // probably invalid parameters
+  if (!strstr(s_influx.url, "http") || strlen(s_influx.org) < 5 || strlen(s_influx.token) < 5 || strlen(s_influx.bucket) < 1)
+    ;
+  return false;
+
   InfluxDBClient ifclient(s_influx.url, s_influx.org, s_influx.bucket, s_influx.token);
 
   ifclient.setWriteOptions(WriteOptions().writePrecision(WritePrecision::S));
@@ -810,6 +815,7 @@ typedef struct
   channel_struct ch[CHANNEL_COUNT];
   char variable_server[MAX_ID_STR_LENGTH]; // used in replica mode
   char entsoe_api_key[37];
+  char entsoe_area_code[17];
   char ntp_server[35];
   char timezone_info[35]; // read from config.json "CET-1CEST,M3.5.0/02,M10.5.0/03", "EET-2EEST,M3.5.0/3,M10.5.0/4"
   char price_area[8];
@@ -825,6 +831,7 @@ typedef struct
   byte energy_meter_id;
   char forecast_loc[MAX_ID_STR_LENGTH];
   byte variable_mode; // VARIABLE_MODE_SOURCE, VARIABLE_MODE_REPLICA
+  char lang[3];       // preferred language
 } settings_struct;
 
 // this stores settings also to eeprom
@@ -1004,11 +1011,6 @@ bool read_config_file(bool read_all_settings)
       Serial.println("Skipping invalid wifi settings from config file.");
   }
 
-#ifdef VARIABLE_SOURCE_ENABLED
-  // copy_doc_str(doc, (char *)"pg_host", s.pg_host);
-
-#endif
-
 #if defined(INVERTER_FRONIUS_SOLARAPI_ENABLED) || defined(INVERTER_SMA_MODBUS_ENABLED)
   if (doc.containsKey("baseload"))
     s.baseload = doc["baseload"];
@@ -1021,36 +1023,37 @@ bool read_config_file(bool read_all_settings)
     s.energy_meter_port = doc["energy_meter_port"];
   if (doc.containsKey("energy_meter_id"))
     s.energy_meter_id = doc["energy_meter_id"];
-
   copy_doc_str(doc, (char *)"forecast_loc", s.forecast_loc);
-
   return true;
 }
 
-// reads sessing from eeprom
+// reads settings from eeprom
 void readFromEEPROM()
 {
-  int used_size = sizeof(s);
   EEPROM.get(eepromaddr, s);
+  int used_size = sizeof(s);
 #ifdef INFLUX_REPORT_ENABLED
   EEPROM.get(eepromaddr + used_size, s_influx);
+ // Serial.printf("readFromEEPROM influx_url:%s\n", s_influx.url);
   used_size += sizeof(s_influx);
 #endif
   Serial.print(F("readFromEEPROM: Reading settings from eeprom, Size: "));
   Serial.println(used_size);
 }
 
-// writes settigns to eeprom
+// writes settings to eeprom
 void writeToEEPROM()
 {
-
   int used_size = sizeof(s);
   EEPROM.put(eepromaddr, s); // write data to array in ram
 #ifdef INFLUX_REPORT_ENABLED
   EEPROM.put(eepromaddr + used_size, s_influx);
   used_size += sizeof(s_influx);
+ // Serial.printf("writeToEEPROM influx_url:%s\n", s_influx.url);
+
 #endif
   EEPROM.commit();
+  EEPROM.end();
   Serial.print(F("writeToEEPROM: Writing settings to eeprom."));
 }
 
@@ -1192,8 +1195,7 @@ void get_values_shelly3m(float &netEnergyInPeriod, float &netPowerInPeriod)
   {
     netPowerInPeriod = 0;
   }
-  Serial.printf("get_values_shelly3m netEnergyInPeriod: %f, netPowerInPeriod %f , meter_read_ts %ld, last_period_last_ts %ld\n"
-  , netEnergyInPeriod, netPowerInPeriod, meter_read_ts, last_period_last_ts);
+  Serial.printf("get_values_shelly3m netEnergyInPeriod: %f, netPowerInPeriod %f , meter_read_ts %ld, last_period_last_ts %ld\n", netEnergyInPeriod, netPowerInPeriod, meter_read_ts, last_period_last_ts);
 }
 
 // reads grid export/import from Shelly 3EM
@@ -1201,7 +1203,6 @@ bool read_meter_shelly3em()
 {
   if (strlen(s.energy_meter_host) == 0)
     return false;
-
 
   DynamicJsonDocument doc(2048);
 
@@ -1594,6 +1595,12 @@ void refresh_variables(time_t current_period_start)
   // vars.set(0, (long)(variable_list["p"]));
   vars.set(VARIABLE_PRICE, (long)(price + 0.5));
 
+  // set currenn price and forecasted solar avg price difference
+  if (vars.is_set(VARIABLE_PVFORECAST_AVGPRICE24))
+    vars.set(VARIABLE_AVGPRICE24_EXCEEDS_CURRENT, (long)vars.get_l(VARIABLE_PVFORECAST_AVGPRICE24) - (vars.get_l(VARIABLE_PRICE)));
+  else
+    vars.set(VARIABLE_AVGPRICE24_EXCEEDS_CURRENT, (long)VARIABLE_LONG_UNKNOWN);
+
   vars.set(VARIABLE_PRICERANK_9, (long)variable_list["pr9"]);
   vars.set(VARIABLE_PRICERANK_24, (long)variable_list["pr24"]);
 
@@ -1621,7 +1628,13 @@ bool get_solar_forecast()
 {
   DynamicJsonDocument doc(3072);
   char fcst_url[100];
-  Serial.println("get_solar_forecast start");
+
+  if (strlen(s.forecast_loc) < 2)
+  {
+    Serial.println(F("Forecast"));
+    return false;
+  }
+  Serial.println(F("get_solar_forecast start"));
 
   String query_data_raw = String("action=getChartData&loc=") + String(s.forecast_loc);
   WiFiClient client;
@@ -1630,6 +1643,11 @@ bool get_solar_forecast()
   client_http.setReuse(false);
   client_http.useHTTP10(true); // for json input
   // Your Domain name with URL path or IP address with path
+
+  // reset variable
+  vars.set(VARIABLE_PVFORECAST_SUM24, (long)VARIABLE_LONG_UNKNOWN);
+  vars.set(VARIABLE_PVFORECAST_VALUE24, (long)VARIABLE_LONG_UNKNOWN);
+  vars.set(VARIABLE_PVFORECAST_AVGPRICE24, (long)VARIABLE_LONG_UNKNOWN);
 
   snprintf(fcst_url, sizeof(fcst_url), "%s&loc=%s", fcst_url_base, s.forecast_loc);
   client_http.begin(client, fcst_url);
@@ -1703,6 +1721,8 @@ bool get_solar_forecast()
   vars.set(VARIABLE_PVFORECAST_SUM24, (float)sum_pv_fcst);
   vars.set(VARIABLE_PVFORECAST_VALUE24, (float)(pv_value));
   vars.set(VARIABLE_PVFORECAST_AVGPRICE24, (float)(pv_value / sum_pv_fcst_with_price));
+  // VARIABLE_PVFORECAST_AVGPRICE24 , VARIABLE_AVGPRICE24_EXCEEDS_CURRENT
+
   doc.clear();
 
   JsonArray pv_fcst_a = doc.createNestedArray("pv_fcst");
@@ -1862,7 +1882,8 @@ bool get_price_data()
     return false;
   }
 
-  String url = url_base + String("&securityToken=") + s.entsoe_api_key + String("&In_Domain=") + queryInOutDomain + String("&Out_Domain=") + queryInOutDomain + "&outBiddingZone_Domain=" + outBiddingZone_Domain + String("&periodStart=") + date_str_start + String("&periodEnd=") + date_str_end;
+  // String url = url_base + String("&securityToken=") + s.entsoe_api_key + String("&In_Domain=") + queryInOutDomain + String("&Out_Domain=") + queryInOutDomain + "&outBiddingZone_Domain=" + outBiddingZone_Domain + String("&periodStart=") + date_str_start + String("&periodEnd=") + date_str_end;
+  String url = url_base + String("&securityToken=") + s.entsoe_api_key + String("&In_Domain=") + s.entsoe_area_code + String("&Out_Domain=") + s.entsoe_area_code + String("&periodStart=") + date_str_start + String("&periodEnd=") + date_str_end;
   Serial.print("requesting URL: ");
 
   Serial.println(url);
@@ -1936,8 +1957,8 @@ bool get_price_data()
         Serial.printf("period_idx %d, price: %f\n", period_idx, (float)price / 100);
         price_array.add(price);
       }
-      else
-        Serial.printf("Cannot store price, period_idx: %d\n", period_idx);
+      // else
+      //   Serial.printf("Cannot store price, period_idx: %d\n", period_idx);
 
       pos = -1;
       price = VARIABLE_LONG_UNKNOWN;
@@ -2134,7 +2155,7 @@ void get_channel_config_fields(char *out, int channel_idx)
     // if gpio channels and non-gpio channels can not be mixed
     //  tässä kai pitäisi toinen ottaa channelista, toinen loopista
     is_gpio_channel = (s.ch[channel_idx].gpio != 255);
-    Serial.printf("is_gpio_channel %d %d %d\n",channel_idx,is_gpio_channel,s.ch[channel_idx].gpio);
+    //Serial.printf("is_gpio_channel %d %d %d\n", channel_idx, is_gpio_channel, s.ch[channel_idx].gpio);
 
     if ((channel_type_idx == 1 && is_gpio_channel) || !(channel_type_idx == 1 || is_gpio_channel))
     {
@@ -2149,7 +2170,7 @@ void get_channel_config_fields(char *out, int channel_idx)
   strcat(out, buff);
   snprintf(buff, 200, "<input type='radio' id='mo_%d_0' name='mo_%d' value='0' %s onchange='setRuleMode(%d, 0,true);'><label for='mo_%d'>Advanced mode</label>\n</div>\n", channel_idx, channel_idx, (s.ch[channel_idx].config_mode == 0) ? "checked='checked'" : "", channel_idx, channel_idx);
   strcat(out, buff);
-  Serial.printf("s.ch[channel_idx].config_mode: %i", (byte)(s.ch[channel_idx].config_mode));
+  //Serial.printf("s.ch[channel_idx].config_mode: %i\n", (byte)(s.ch[channel_idx].config_mode));
 
   snprintf(buff, sizeof(buff), "<div id='rt_%d'><select id='rts_%d' onfocus='saveVal(this)' name='rts_%d' onchange='templateChanged(this)'></select></div>\n", channel_idx, channel_idx, channel_idx);
   strcat(out, buff);
@@ -2347,13 +2368,15 @@ String admin_form_processor(const String &var)
     return s.http_username;
   if (var == "http_password")
     return s.http_password;
+  if (var == "lang")
+    return s.lang;
 
   return String();
 }
 
 String inputs_form_processor(const String &var)
 {
-  Serial.println(var);
+  // Serial.println(var);
   if (var == F("emt"))
     return String(s.energy_meter_type);
 
@@ -2406,12 +2429,34 @@ String inputs_form_processor(const String &var)
   if (var == F("entsoe_api_key"))
     return String(s.entsoe_api_key);
 
-  if (var == F("entsoe_api_key"))
-    return String(s.entsoe_api_key);
+  if (var == F("entsoe_area_code"))
+    return String(s.entsoe_area_code);
+
   if (var == F("variable_server"))
     return String(s.variable_server);
   if (var == F("forecast_loc"))
     return String(s.forecast_loc);
+
+  // influx
+  if (var == F("INFLUX_REPORT_ENABLED"))
+#ifdef INFLUX_REPORT_ENABLED
+    return String(1);
+#else
+    return String(0);
+#endif
+#ifdef INFLUX_REPORT_ENABLED
+  if (var == F("influx_url"))
+    return String(s_influx.url);
+  if (var == F("influx_token"))
+  {
+    Serial.printf("returned %s\n", s_influx.token);
+    return String(s_influx.token);
+  }
+  if (var == F("influx_org"))
+    return String(s_influx.org);
+  if (var == F("influx_bucket"))
+    return String(s_influx.bucket);
+#endif
 
   return String();
 }
@@ -2474,8 +2519,14 @@ String jscode_form_processor(const String &var)
     strcat(out, "]");
     return out;
   };
+
+  if (var == "lang")
+    return s.lang;
+
   return String();
 }
+
+
 // varibles for the admin form
 String setup_form_processor(const String &var)
 {
@@ -2832,7 +2883,7 @@ void sendForm(AsyncWebServerRequest *request, const char *template_name)
 }
 void sendForm(AsyncWebServerRequest *request, const char *template_name, AwsTemplateProcessor processor)
 {
-  Serial.printf("sendForm2: %s\n", template_name);
+ // Serial.printf("sendForm2: %s\n", template_name);
   if (!request->authenticate(s.http_username, s.http_password))
     return request->requestAuthentication();
   check_forced_restart(true); // if in forced ap-mode, reset counter to delay automatic restart
@@ -2965,11 +3016,9 @@ void onWebInputsPost(AsyncWebServerRequest *request)
     restart_required = true;
     s.energy_meter_type = request->getParam("emt", true)->value().toInt();
   }
-  Serial.println("onWebInputsPost B");
   strcpy(s.energy_meter_host, request->getParam("emh", true)->value().c_str());
   s.energy_meter_port = request->getParam("emp", true)->value().toInt();
   s.energy_meter_id = request->getParam("emid", true)->value().toInt();
-  Serial.println("onWebInputsPost C");
 #ifdef INVERTER_FRONIUS_SOLARAPI_ENABLED
   s.baseload = request->getParam("baseload", true)->value().toInt();
 #endif
@@ -2978,17 +3027,36 @@ void onWebInputsPost(AsyncWebServerRequest *request)
   if (s.variable_mode == 0)
   {
     strcpy(s.entsoe_api_key, request->getParam("entsoe_api_key", true)->value().c_str());
-    strcpy(s.forecast_loc, request->getParam("forecast_loc", true)->value().c_str());
+    if (strcmp(s.entsoe_area_code, request->getParam("entsoe_area_code", true)->value().c_str()) != 0)
+    {
+      strcpy(s.entsoe_area_code, request->getParam("entsoe_area_code", true)->value().c_str());
+      
+      // price area changes, clear cache
+      LittleFS.remove(price_data_filename);
+    }
+    //Solar forecast supported currently only in Finland
+    if (strcmp(s.entsoe_area_code, "10YFI-1--------U") == 0)
+      strcpy(s.forecast_loc, request->getParam("forecast_loc", true)->value().c_str());
+    else 
+      strcpy(s.forecast_loc, "#");
+      
   }
-  Serial.println("onWebInputsPost C3");
   if (s.variable_mode == 1)
   {
     strcpy(s.variable_server, request->getParam("variable_server", true)->value().c_str());
   }
-  Serial.println("onWebInputsPost D");
+
+#ifdef INFLUX_REPORT_ENABLED
+  strncpy(s_influx.url, request->getParam("influx_url", true)->value().c_str(), sizeof(s_influx.url));
+ // Serial.printf("influx_url:%s\n", s_influx.url);
+  strcpy(s_influx.token, request->getParam("influx_token", true)->value().c_str());
+  strcpy(s_influx.org, request->getParam("influx_org", true)->value().c_str());
+  strcpy(s_influx.bucket, request->getParam("influx_bucket", true)->value().c_str());
+#endif
 
   // END OF INPUTS
   writeToEEPROM();
+ // Serial.printf("2...influx_url:%s\n", s_influx.url);
   restart_required = true;
   request->send(200, "text/html", "<html><head><meta http-equiv='refresh' content='10; url=/inputs' /></head><body>restarting...wait...</body></html>");
   // request->redirect("/channels");
@@ -3160,6 +3228,9 @@ void onWebAdminPost(AsyncWebServerRequest *request)
     if (request->getParam("http_password", true)->value().equals(request->getParam("http_password2", true)->value()) && request->getParam("http_password", true)->value().length() >= 5)
       strcpy(s.http_password, request->getParam("http_password", true)->value().c_str());
   }
+  strcpy(s.lang, request->getParam("lang", true)->value().c_str());
+
+
   // ADMIN
   if (request->getParam("op", true)->value().equals("ts"))
   {
@@ -3267,6 +3338,7 @@ void onWebStatusGet(AsyncWebServerRequest *request)
 // Everythign starts from here in while starting the controller
 void setup()
 {
+
   Serial.begin(115200);
   delay(2000); // wait for console settle - only needed when debugging
 
@@ -3298,7 +3370,12 @@ void setup()
   Serial.print(F("sizeof(s):"));
   Serial.print(sizeof(s));
 
-  EEPROM.begin(sizeof(s));
+  // initiate EEPROM with correct size
+  int eeprom_used_size = sizeof(s);
+#ifdef INFLUX_REPORT_ENABLED
+  eeprom_used_size += sizeof(s_influx);
+#endif
+  EEPROM.begin(eeprom_used_size);
   readFromEEPROM();
 
   if (s.check_value != EEPROM_CHECK_VALUE) // setup not initiated
@@ -3632,7 +3709,7 @@ void loop()
     period_changed = true;
 // TODO: tästö voisi lähteä kutsumaan influsxdata-siirtoa
 #ifdef INFLUX_REPORT_ENABLED
-    add_variables_to_influx_buffer(previous_period_start); 
+    add_variables_to_influx_buffer(previous_period_start);
     influx_write_queued = true;
 #endif
   }
@@ -3704,7 +3781,7 @@ void loop()
     read_energy_meter();
 
 #ifdef SENSOR_DS18B20_ENABLED
-    read_sensor_ds18B20(); //this can last a while due to possible reset timeout
+    read_sensor_ds18B20(); // this can last a while due to possible reset timeout
 #endif
 
     processing_variables = true;

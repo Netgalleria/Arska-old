@@ -1,7 +1,7 @@
 /*
 Copyright, Netgalleria Oy, Olli Rinne 2021-2022
 */
-const sections = [{ "url": "/", "en": "Dashboard" }, { "url": "/inputs", "en": "Inputs" }
+const sections = [{ "url": "/", "en": "Dashboard" }, { "url": "/inputs", "en": "Services" }
     , { "url": "/channels", "en": "Channels" }, { "url": "/admin", "en": "Admin" }];
 
 const opers = JSON.parse('%OPERS%');
@@ -10,6 +10,7 @@ const CHANNEL_COUNT = parseInt('%CHANNEL_COUNT%'); //parseInt hack to prevent au
 const CHANNEL_CONDITIONS_MAX = parseInt('%CHANNEL_CONDITIONS_MAX%');
 const RULE_STATEMENTS_MAX = parseInt('%RULE_STATEMENTS_MAX%');
 const channels = JSON.parse('%channels%');  //moving data (for UI processing ) 
+const lang = '%lang%';
 
 
 // https://stackoverflow.com/questions/7317273/warn-user-before-leaving-web-page-with-unsaved-changes
@@ -18,9 +19,12 @@ var setFormSubmitting = function () {
     formSubmitting = true;
 };
 
+//disable/enable UI elements depending on varible mode (source/replica)
 function setVariableMode(variable_mode) {
     document.getElementById("entsoe_api_key").disabled = (variable_mode != 0);
+    document.getElementById("entsoe_area_code").disabled = (variable_mode != 0);
     document.getElementById("forecast_loc").disabled = (variable_mode != 0);
+
     document.getElementById("variable_server").disabled = (variable_mode != 1);
 }
 
@@ -32,6 +36,7 @@ function statusCBClicked(elCb) {
     document.getElementById("variables").style.display = document.getElementById("statusauto").checked ? "block" : "none";
 }
 
+// update variables and channels statuses to channels form
 function updateStatus(show_variables = true) {
     $.getJSON('/status', function (data) {
         if (show_variables) {
@@ -268,16 +273,25 @@ function populateTemplateSel(selEl, template_id = -1) {
     addOption(selEl, -1, "select", false);
     $.getJSON('/data/template-list.json', function (data) {
         $.each(data, function (i, row) {
-            addOption(selEl, row["id"], row["name"], (template_id == row["id"]));
+            addOption(selEl, row["id"], _ltext(row,"name"), (template_id == row["id"]));
         });
     });
 }
 
+// unused ?
 function saveVal(el) {
-    $.data(el, 'current', $(el).val());
-    // alert($.data(el, 'current'));
-    // $(selEl.id).data('lastValue',$(this).val());   
+    $.data(el, 'current', $(el).val()); 
 }
+
+//localised text
+function _ltext(obj, prop) {
+    if (obj.hasOwnProperty(prop + '_' + lang))
+        return obj[prop + '_' + lang];
+    else if (obj.hasOwnProperty('prop'))
+        return obj[prop];
+    else
+        return '['+prop+']';
+ }
 
 function templateChanged(selEl) {
     const fldA = selEl.id.split("_");
@@ -291,7 +305,7 @@ function templateChanged(selEl) {
             deleteStmtsUI(channel_idx);
             return true;
         }
-        if (!confirm('Use template ' + data.name + ' - ' + data.desc)) {
+        if (!confirm('Use template ' + _ltext(data,"name") + ' - ' + _ltext(data,"desc"))) {
             $(selEl).val($.data(selEl, 'current'));
             return false;
         }
@@ -431,7 +445,7 @@ function setVar(evt) {
 }
 
 // operator select changed, show next statement fields if hidden
-function setOper(evt) { 
+function setOper(evt) {
     const el = evt.target;
     if ((el.value >= 0)) {
         fldA = el.id.split("_");
@@ -627,15 +641,17 @@ function initUrlBar(url) {
     // <a href="/">Dashboard</a> | <span> <b>Admin</b> </span>
 
 }
-
 //
-
-
 
 function initForm(url) {
     initUrlBar(url);
     if (url == '/admin') {
         initWifiForm();
+        // set language select element
+        var lang = document.getElementById("lang_db").value;
+        $('#lang option').filter(function () {
+            return this.value.indexOf(lang) > -1;
+        }).prop('selected', true);
     }
     else if (url == '/channels') {
         initChannelForm();
@@ -657,11 +673,24 @@ function initForm(url) {
         document.getElementById("variable_mode_" + variable_mode).checked = true;
 
         setEnergyMeterFields(document.getElementById("emt").value);
-        var mLocation = document.getElementById("forecast_loc_db").value;
+
+        //set forecast location select element
+        var location = document.getElementById("forecast_loc_db").value;
         $('#forecast_loc option').filter(function () {
-            return this.value.indexOf(mLocation) > -1;
+            return this.value.indexOf(location) > -1;
         }).prop('selected', true);
 
+        //set forecast location select element
+        var area_code = document.getElementById("entsoe_area_code_db").value;
+        $('#entsoe_area_code option').filter(function () {
+            return this.value.indexOf(area_code) > -1;
+        }).prop('selected', true);
+
+
+        // show influx definations only if enbaled by server
+        if (document.getElementById("INFLUX_REPORT_ENABLED").value != 1) {
+            document.getElementById("influx_div").style.display = "none";
+        }
     }
 
     var footerdiv = document.getElementById("footerdiv");

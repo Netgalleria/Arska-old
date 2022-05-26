@@ -646,12 +646,17 @@ void add_variables_to_influx_buffer(time_t ts)
 bool write_buffer_to_influx()
 {
   if (!period_data.hasFields())
+  {
+    Serial.println(F("write_buffer_to_influx no fields in period_data."));
     return true; // no fields in the buffer
+  }
 
   // probably invalid parameters
   if (!strstr(s_influx.url, "http") || strlen(s_influx.org) < 5 || strlen(s_influx.token) < 5 || strlen(s_influx.bucket) < 1)
-    ;
-  return false;
+  {
+    Serial.println(F("write_buffer_to_influx: invalid or missing parameters."));
+    return false;
+  }
 
   InfluxDBClient ifclient(s_influx.url, s_influx.org, s_influx.bucket, s_influx.token);
 
@@ -1034,7 +1039,7 @@ void readFromEEPROM()
   int used_size = sizeof(s);
 #ifdef INFLUX_REPORT_ENABLED
   EEPROM.get(eepromaddr + used_size, s_influx);
- // Serial.printf("readFromEEPROM influx_url:%s\n", s_influx.url);
+  // Serial.printf("readFromEEPROM influx_url:%s\n", s_influx.url);
   used_size += sizeof(s_influx);
 #endif
   Serial.print(F("readFromEEPROM: Reading settings from eeprom, Size: "));
@@ -1049,7 +1054,7 @@ void writeToEEPROM()
 #ifdef INFLUX_REPORT_ENABLED
   EEPROM.put(eepromaddr + used_size, s_influx);
   used_size += sizeof(s_influx);
- // Serial.printf("writeToEEPROM influx_url:%s\n", s_influx.url);
+  // Serial.printf("writeToEEPROM influx_url:%s\n", s_influx.url);
 
 #endif
   EEPROM.commit();
@@ -2155,7 +2160,7 @@ void get_channel_config_fields(char *out, int channel_idx)
     // if gpio channels and non-gpio channels can not be mixed
     //  tässä kai pitäisi toinen ottaa channelista, toinen loopista
     is_gpio_channel = (s.ch[channel_idx].gpio != 255);
-    //Serial.printf("is_gpio_channel %d %d %d\n", channel_idx, is_gpio_channel, s.ch[channel_idx].gpio);
+    // Serial.printf("is_gpio_channel %d %d %d\n", channel_idx, is_gpio_channel, s.ch[channel_idx].gpio);
 
     if ((channel_type_idx == 1 && is_gpio_channel) || !(channel_type_idx == 1 || is_gpio_channel))
     {
@@ -2170,7 +2175,7 @@ void get_channel_config_fields(char *out, int channel_idx)
   strcat(out, buff);
   snprintf(buff, 200, "<input type='radio' id='mo_%d_0' name='mo_%d' value='0' %s onchange='setRuleMode(%d, 0,true);'><label for='mo_%d'>Advanced mode</label>\n</div>\n", channel_idx, channel_idx, (s.ch[channel_idx].config_mode == 0) ? "checked='checked'" : "", channel_idx, channel_idx);
   strcat(out, buff);
-  //Serial.printf("s.ch[channel_idx].config_mode: %i\n", (byte)(s.ch[channel_idx].config_mode));
+  // Serial.printf("s.ch[channel_idx].config_mode: %i\n", (byte)(s.ch[channel_idx].config_mode));
 
   snprintf(buff, sizeof(buff), "<div id='rt_%d'><select id='rts_%d' onfocus='saveVal(this)' name='rts_%d' onchange='templateChanged(this)'></select></div>\n", channel_idx, channel_idx, channel_idx);
   strcat(out, buff);
@@ -2525,7 +2530,6 @@ String jscode_form_processor(const String &var)
 
   return String();
 }
-
 
 // varibles for the admin form
 String setup_form_processor(const String &var)
@@ -2883,7 +2887,7 @@ void sendForm(AsyncWebServerRequest *request, const char *template_name)
 }
 void sendForm(AsyncWebServerRequest *request, const char *template_name, AwsTemplateProcessor processor)
 {
- // Serial.printf("sendForm2: %s\n", template_name);
+  // Serial.printf("sendForm2: %s\n", template_name);
   if (!request->authenticate(s.http_username, s.http_password))
     return request->requestAuthentication();
   check_forced_restart(true); // if in forced ap-mode, reset counter to delay automatic restart
@@ -3030,16 +3034,15 @@ void onWebInputsPost(AsyncWebServerRequest *request)
     if (strcmp(s.entsoe_area_code, request->getParam("entsoe_area_code", true)->value().c_str()) != 0)
     {
       strcpy(s.entsoe_area_code, request->getParam("entsoe_area_code", true)->value().c_str());
-      
+
       // price area changes, clear cache
       LittleFS.remove(price_data_filename);
     }
-    //Solar forecast supported currently only in Finland
+    // Solar forecast supported currently only in Finland
     if (strcmp(s.entsoe_area_code, "10YFI-1--------U") == 0)
       strcpy(s.forecast_loc, request->getParam("forecast_loc", true)->value().c_str());
-    else 
+    else
       strcpy(s.forecast_loc, "#");
-      
   }
   if (s.variable_mode == 1)
   {
@@ -3048,7 +3051,7 @@ void onWebInputsPost(AsyncWebServerRequest *request)
 
 #ifdef INFLUX_REPORT_ENABLED
   strncpy(s_influx.url, request->getParam("influx_url", true)->value().c_str(), sizeof(s_influx.url));
- // Serial.printf("influx_url:%s\n", s_influx.url);
+  // Serial.printf("influx_url:%s\n", s_influx.url);
   strcpy(s_influx.token, request->getParam("influx_token", true)->value().c_str());
   strcpy(s_influx.org, request->getParam("influx_org", true)->value().c_str());
   strcpy(s_influx.bucket, request->getParam("influx_bucket", true)->value().c_str());
@@ -3056,7 +3059,7 @@ void onWebInputsPost(AsyncWebServerRequest *request)
 
   // END OF INPUTS
   writeToEEPROM();
- // Serial.printf("2...influx_url:%s\n", s_influx.url);
+  // Serial.printf("2...influx_url:%s\n", s_influx.url);
   restart_required = true;
   request->send(200, "text/html", "<html><head><meta http-equiv='refresh' content='10; url=/inputs' /></head><body>restarting...wait...</body></html>");
   // request->redirect("/channels");
@@ -3229,7 +3232,6 @@ void onWebAdminPost(AsyncWebServerRequest *request)
       strcpy(s.http_password, request->getParam("http_password", true)->value().c_str());
   }
   strcpy(s.lang, request->getParam("lang", true)->value().c_str());
-
 
   // ADMIN
   if (request->getParam("op", true)->value().equals("ts"))

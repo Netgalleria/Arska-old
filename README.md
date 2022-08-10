@@ -1,3 +1,3 @@
 # This repository is not in use 
 
- [Arska Node](https://github.com/Netgalleria/arska-node) 
+ Current repository: [https://github.com/Netgalleria/arska-node](https://github.com/Netgalleria/arska-node) 
